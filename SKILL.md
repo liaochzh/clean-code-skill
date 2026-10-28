@@ -486,12 +486,19 @@ When reviewing or writing code, check in this order:
 
 ---
 
-## 项目类型扩展规则
+## 项目类型扩展规则（可选增强）
 
-根据项目类型，加载对应扩展规则。项目类型检测逻辑见 `~/.config/opencode/references/project-type-detect.md`。
+基线规则**始终生效**；下列扩展规则是**本机可选配置，不随本仓库发布**。项目类型检测逻辑见 `~/.config/opencode/references/project-type-detect.md`。
 
-**优先级**：扩展规则与基线冲突时，**扩展规则优先**（如 Flutter `build()` 方法允许 ≤120 行，覆盖基线 ≤20 行）。
+**降级策略**（不得因缺文件跳过检查）：
+- 无 `pubspec.yaml` 或无法读取 → 按基线，提示「无法检测项目类型，应用通用规则」。
+- 扩展规则文件不存在 → **只应用基线**；不要中止、也不要声称已加载。
+- 检测过程出错 → 按基线并说明原因。
 
-- `flutter-getx-mvvm` → 读取 `~/.config/opencode/references/flutter-getx-mvvm.md`
-- `flutter-riverpod-clean` → 读取 `~/.config/opencode/references/flutter-riverpod-clean.md`
-- 其他 → 仅应用上述基线规则
+**优先级**：仅在**确实加载**了对应扩展规则时才「扩展规则优先」（如 Flutter `build()` 方法允许 ≤120 行，覆盖基线 ≤20 行）；未加载时一律按基线，不得凭记忆套用豁免。
+
+| 项目类型 | 扩展规则文件（本机可选，不随仓库发布） |
+|---|---|
+| `flutter-getx-mvvm` | `~/.config/opencode/references/flutter-getx-mvvm.md`（提炼自特定私有项目规范，公开读者通常不适用） |
+| `flutter-riverpod-clean` | `~/.config/opencode/references/flutter-riverpod-clean.md`（同上） |
+| 其他 | 仅应用上述基线规则 |
