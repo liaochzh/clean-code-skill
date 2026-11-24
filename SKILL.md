@@ -39,20 +39,9 @@ description: 整洁代码规范。编写/重构/审查代码时应用。包含�
 判断方法：**改一处时，另一处是否必然跟着改？** 是 → 真重复；否 → 偶然重复。
 **三次法则**：第一次直接写，第二次记一下，第三次再抽象。
 
-**抽象前四问**（有一问为"否"就先忍着，保持重复）：
+**抽象前四问**（有一问为「否」就先忍着，保持重复）：① 代表单一业务概念？② 一个实例变了，所有实例必然跟着变？③ 能起好名字（不是 Utils / Helper / Common）？④ 整体复杂度下降了？
 
-1. 它代表一个单一业务概念吗？
-2. 一个实例变了，所有实例必然跟着变吗？
-3. 能起一个好名字（不是 Utils / Helper / Common）吗？
-4. 抽象后整体复杂度下降了吗？
-
-**最小代码阶梯**（动手前从上往下，命中即停）：
-
-1. 真的需要吗？（YAGNI → 不写）
-2. 仓库里已经有人写过吗？（先搜 → 复用/扩展，别造第二个）
-3. 标准库 / 平台 API / 已安装依赖能做吗？（用它，别自己实现）
-4. 一行能解决吗？（写一行）
-5. 以上都不行，再写最小实现。安全、校验、错误处理、无障碍不许为"精简"让路。
+**最小代码阶梯**（动手前从上往下，命中即停）：真的需要吗（YAGNI）→ 仓库里已有吗（先搜，别造第二个）→ 标准库 / 平台 API / 已装依赖能做吗 → 一行能解决吗 → 再写最小实现。安全、校验、错误处理、无障碍不许为「精简」让路。
 
 **范围纪律（手术式改动）**：默认只改任务需要的那一小块，每行改动都能追溯到请求。
 顺手发现的其它异味——只报告，不修改（除非任务本身就是清理，或它阻塞了当前目标）。
@@ -100,71 +89,17 @@ description: 整洁代码规范。编写/重构/审查代码时应用。包含�
 | **DRY 阈值** | 3 次重复再抽象 | 过早抽象比重复更糟 |
 | **提取到底** | 能提取有意义子函数就提取 | 自文档化代码 |
 
-**守卫子句示例**：
+**守卫子句示例**（`processOrder`：5 层嵌套 → 边界全部提前返回，主流程零缩进）：
 ```pseudo
-// BAD — 5 层嵌套
-function processOrder(order) {
-  if (order) {
-    if (order.items.length > 0) {
-      if (order.customer) {
-        if (order.customer.isVerified) {
-          return submitOrder(order);
-        }
-      }
-    }
-  }
-  throw Error('Invalid order');
-}
-
-// GOOD — 守卫子句扁平化
-function processOrder(order) {
-  if (!order) throw Error('No order');
-  if (!order.items.length) throw Error('No items');
-  if (!order.customer) throw Error('No customer');
-  if (!order.customer.isVerified) throw Error('Customer not verified');
-  return submitOrder(order);
-}
+// BAD: if (order) { if (order.items.length) { if (order.customer) { if (order.customer.isVerified) { return … } } } }
+// GOOD:
+if (!order) throw Error('No order');
+if (!order.items.length) throw Error('No items');
+if (!order.customer?.isVerified) throw Error('Invalid customer');
+return submitOrder(order);
 ```
 
-**参数对象示例**：
-```pseudo
-// BAD — 参数过多，顺序敏感
-createUser('John', 'Doe', 'john@example.com', 'secret', 'admin', 'Engineering');
-
-// GOOD — 自文档化选项对象
-createUser({
-  firstName: 'John',
-  lastName: 'Doe',
-  email: 'john@example.com',
-  password: 'secret',
-  role: 'admin',
-  department: 'Engineering',
-});
-```
-
-**返回类型一致性**：
-```pseudo
-// BAD — 返回不同类型
-function getUser(id) {
-  const user = database.find(id);
-  if (!user) return false;      // boolean
-  if (user.isDeleted) return null; // null
-  return user;                   // User
-}
-
-// GOOD — 判别联合
-type GetUserResult =
-  | { status: 'found'; user: User }
-  | { status: 'not_found' }
-  | { status: 'deleted' };
-
-function getUser(id): GetUserResult {
-  const user = database.find(id);
-  if (!user) return { status: 'not_found' };
-  if (user.isDeleted) return { status: 'deleted' };
-  return { status: 'found', user };
-}
-```
+**返回类型一致性**：同一函数返回 `User` / `false` / `null` 是 BAD（调用方得猜三分支）；改用判别联合 `{ status: 'found'; user } | { status: 'not_found' } | { status: 'deleted' }`，让类型系统穷举。
 
 ---
 
@@ -207,29 +142,6 @@ function getUser(id): GetUserResult {
 | 提取函数 | 注释分隔"段落" | 自文档化代码 |
 | 组合优于上帝函数 | 复杂业务流程 | 单一职责、可测试 |
 
-**组合示例**：
-```pseudo
-// BAD — 上帝函数
-async function processOrder(order) {
-  // Validate... (15行)
-  // Calculate totals... (15行)
-  // Process payment... (10行)
-  // Send notifications... (10行)
-  // Update inventory... (10行)
-  return { success: true };
-}
-
-// GOOD — 组合小函数
-async function processOrder(order) {
-  validateOrder(order);
-  const totals = calculateOrderTotals(order);
-  const payment = await processPayment(order.customer, totals);
-  await sendOrderConfirmation(order, payment);
-  await updateInventory(order.items);
-  return { success: true, orderId: payment.orderId };
-}
-```
-
 ---
 
 ## 错误处理
@@ -256,13 +168,7 @@ async function processOrder(order) {
 
 **反模式**：既有公开字段又有业务方法的类 = 两全其弊最坏情况。
 
-**迪米特法则**：方法只调用：
-- 自己的对象
-- 参数对象
-- 自己创建的对象
-- 直接依赖
-
-**禁止**：`a.getB().getC().doThing()`（火车残骸）
+**迪米特法则**：方法只调用自己的对象、参数对象、自己创建的对象与直接依赖；禁止 `a.getB().getC().doThing()`（火车残骸）。
 
 ---
 
@@ -390,19 +296,12 @@ AI 出错很少在语法，多在这十类。审查自己或他人产出时逐�
 ## 测试规范 (TDD)
 
 ### 三定律
-1. **先写失败测试** — 不写产出代码直到有失败测试
-2. **仅写够失败的测试** — 编译不通过也算失败
-3. **仅写够通过的产出代码** — 不写多余代码
+先写失败测试 → 只写够失败的测试（编译不通过也算失败）→ 只写够通过的最少产出代码。
 
 ### 测试质量
 - **Tests are first-class code** — 保持清洁、可读、快速
 - **One assert per test** (指导非教条) — 一个概念一个测试
-- **F.I.R.S.T.**:
-  - **Fast** — 快速运行
-  - **Independent** — 无顺序依赖
-  - **Repeatable** — 任何环境可重复
-  - **Self-validating** — 自我验证（无需人工判断）
-  - **Timely** — 与产出代码同步编写
+- **F.I.R.S.T.**：Fast 快 / Independent 无顺序依赖 / Repeatable 任何环境可重复 / Self-validating 无需人工判断 / Timely 与产出码同步写
 
 ### 测试策略
 - 测试**边界**，不测实现
@@ -452,11 +351,9 @@ AI 出错很少在语法，多在这十类。审查自己或他人产出时逐�
 
 ## NEVER 清单（绝对禁止）
 
-- ❌ 添加仅重述代码的注释 — 若需注释解释"做什么"，重命名直到不需注释
+- ❌ 添加仅重述代码的注释或留注释掉代码 — 前者重命名直到不需注释，后者删掉（版本控制保存历史）
 - ❌ 为 <3 用例创建抽象 — 过早抽象比重复更糟
-- ❌ 留注释掉代码 — 删掉；版本控制保存历史
-- ❌ 写 >20 行函数 — 提取子函数直到各司其职
-- ❌ 嵌套 >2 层 — 用守卫子句、提前返回、提取函数
+- ❌ 写 >20 行函数或嵌套 >2 层 — 提取子函数、用守卫子句与提前返回，直到各司其职
 - ❌ 用魔法数字/字符串 — 定义语义清晰的命名常量
 - ❌ 不检查依赖就改文件 — 破损导入和缺失更新是多文件改动最常见 Bug 源
 - ❌ 留失败的 lint/类型检查 — 修完所有错误再标记完成
@@ -470,8 +367,6 @@ AI 出错很少在语法，多在这十类。审查自己或他人产出时逐�
 Web 侧淘汰闸门见哲学层 §交付闸门（11 项；无 Brief 依据时命中即淘汰）；本文件不重复。
 
 ## 应用检查顺序
-
-When reviewing or writing code, check in this order:
 
 0. **Scope** — 这行改动属于本次请求吗？不属于就撤回或只报告
 1. **Readability** — 能在 30 秒内理解吗？
